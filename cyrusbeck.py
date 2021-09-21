@@ -33,6 +33,10 @@ class Dot(pygame.sprite.Sprite):
     def rotate(self, coords):
         self.rect.center = coords
 
+    def scale(self, mult):
+        x, y = self.rect.center
+        self.rect.center = (x + x * mult, y + y * mult)
+
 
 def get_dots_coordinates(group):
     dots_list = group.sprites()
@@ -294,26 +298,36 @@ while True:
         if sb_isPressed:
             dots = np.array(get_dots_coordinates(needed_figure[0]))
             mouse_difference = final_pos[1] - pos[1]
-            for ind, dot in enumerate(needed_figure[0]):
-                coord_diff = np.array(dots[ind] - prim_center)
-                if mouse_difference > 0:
-                    if coord_diff[0] < 0 and coord_diff[1] > 0:
-                        dot.translate(np.array((-1, 1)))
-                    if coord_diff[0] > 0 and coord_diff[1] > 0:
-                        dot.translate(np.array((1, 1)))
-                    if coord_diff[0] > 0 and coord_diff[1] < 0:
-                        dot.translate(np.array((1, -1)))
-                    if coord_diff[0] < 0 and coord_diff[1] < 0:
-                        dot.translate(np.array((-1, -1)))
+            mult = 0.01
+            for dot in needed_figure[0]:
                 if mouse_difference < 0:
-                    if coord_diff[0] < 0 and coord_diff[1] > 0:
-                        dot.translate(np.array((1, -1)))
-                    if coord_diff[0] > 0 and coord_diff[1] > 0:
-                        dot.translate(np.array((-1, -1)))
-                    if coord_diff[0] > 0 and coord_diff[1] < 0:
-                        dot.translate(np.array((-1, 1)))
-                    if coord_diff[0] < 0 and coord_diff[1] < 0:
-                        dot.translate(np.array((1, 1)))
+                    dot.scale(mult)
+                elif mouse_difference > 0:
+                    dot.scale(-mult)
+                center = get_polygon_center(dots)
+                diff = np.array(prim_center) - np.array(center)
+                dot.translate(diff)
+                
+            # for ind, dot in enumerate(needed_figure[0]):
+            #     coord_diff = np.array(dots[ind] - prim_center)
+            #     if mouse_difference > 0:
+            #         if coord_diff[0] < 0 and coord_diff[1] > 0:
+            #             dot.translate(np.array((-1, 1)))
+            #         if coord_diff[0] > 0 and coord_diff[1] > 0:
+            #             dot.translate(np.array((1, 1)))
+            #         if coord_diff[0] > 0 and coord_diff[1] < 0:
+            #             dot.translate(np.array((1, -1)))
+            #         if coord_diff[0] < 0 and coord_diff[1] < 0:
+            #             dot.translate(np.array((-1, -1)))
+            #     if mouse_difference < 0:
+            #         if coord_diff[0] < 0 and coord_diff[1] > 0:
+            #             dot.translate(np.array((1, -1)))
+            #         if coord_diff[0] > 0 and coord_diff[1] > 0:
+            #             dot.translate(np.array((-1, -1)))
+            #         if coord_diff[0] > 0 and coord_diff[1] < 0:
+            #             dot.translate(np.array((-1, 1)))
+            #         if coord_diff[0] < 0 and coord_diff[1] < 0:
+            #             dot.translate(np.array((1, 1)))
             pos = pygame.mouse.get_pos()
 
     screen.fill(COLORS['WHITE'])
