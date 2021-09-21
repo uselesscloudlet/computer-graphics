@@ -134,6 +134,26 @@ def get_polygon_center(dots):
     return center
 
 
+def rotate_polygon(points, degrees):
+    theta = np.radians(degrees)  # Convert angle to radians
+    cosang, sinang = np.cos(theta), np.sin(theta)
+
+    # find center point of Polygon to use as pivot
+    n = len(points)
+    cx = sum(p[0] for p in points) / n
+    cy = sum(p[1] for p in points) / n
+
+    new_points = []
+    for p in points:
+        x, y = p[0], p[1]
+        tx, ty = x - cx, y - cy
+        new_x = (tx * cosang + ty * sinang) + cx
+        new_y = (-tx*sinang + ty*cosang) + cy
+        new_points.append((new_x, new_y))
+
+    return new_points
+
+
 pygame.init()
 pygame.display.set_caption("Cyrus-Beck Algorithm")
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -235,13 +255,23 @@ while True:
                             right_bot = np.array(
                                 [SCREEN_WIDTH - 100 - max_x,
                                  SCREEN_HEIGHT - max_y]
-                                )
+                            )
                             break
                 elif rb_isPressed:
-                    dots = get_dots_coordinates(all_dots[0][0])
-                    center = get_polygon_center(dots)
-                    print(pos)
-                    pass
+                    for sample in reversed(all_dots[:-1]):
+                        dots = get_dots_coordinates(sample[0])
+                        if ray_tracing(*pos, dots):
+                            needed_figure = sample
+                            min_x = np.min([dot[0] for dot in dots])
+                            max_x = np.max([dot[0] for dot in dots])
+                            min_y = np.min([dot[1] for dot in dots])
+                            max_y = np.max([dot[1] for dot in dots])
+                            left_top = -np.array([min_x, min_y])
+                            right_bot = np.array(
+                                [SCREEN_WIDTH - 100 - max_x,
+                                 SCREEN_HEIGHT - max_y]
+                            )
+                            break
             else:
                 break
         if event.type == pygame.MOUSEBUTTONUP:
@@ -259,6 +289,16 @@ while True:
             dot.translate(delta)
         left_top -= delta
         right_bot -= delta
+
+    if rb_isPressed and needed_figure is not None:
+        final_pos = pygame.mouse.get_pos()
+        center = get_polygon_center(dots)
+        dots = get_dots_coordinates(all_dots[0][0])
+        angle = final_pos[1] - pos[1]
+        rotated_polygon = rotate_polygon(points=dots, degrees=angle)
+        for ind, dot in enumerate(needed_figure[0]):
+            print(f'{dot} => {rotated_polygon[ind]}')
+            dot.rotate(rotated_polygon[ind])
 
     screen.fill(COLORS['WHITE'])
     menu_rect = pygame.Rect(SCREEN_WIDTH-100, 0, 100, SCREEN_HEIGHT)
