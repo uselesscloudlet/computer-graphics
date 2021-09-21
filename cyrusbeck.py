@@ -134,24 +134,13 @@ def get_polygon_center(dots):
     return center
 
 
-def rotate_polygon(points, degrees):
-    theta = np.radians(degrees)  # Convert angle to radians
-    cosang, sinang = np.cos(theta), np.sin(theta)
+def rotate(origin, point, angle):
+    ox, oy = origin
+    px, py = point
 
-    # find center point of Polygon to use as pivot
-    n = len(points)
-    cx = sum(p[0] for p in points) / n
-    cy = sum(p[1] for p in points) / n
-
-    new_points = []
-    for p in points:
-        x, y = p[0], p[1]
-        tx, ty = x - cx, y - cy
-        new_x = (tx * cosang + ty * sinang) + cx
-        new_y = (-tx*sinang + ty*cosang) + cy
-        new_points.append((new_x, new_y))
-
-    return new_points
+    qx = ox + np.cos(angle) * (px - ox) - np.sin(angle) * (py - oy)
+    qy = oy + np.sin(angle) * (px - ox) + np.cos(angle) * (py - oy)
+    return np.ceil(qx), np.ceil(qy)
 
 
 pygame.init()
@@ -262,43 +251,70 @@ while True:
                         dots = get_dots_coordinates(sample[0])
                         if ray_tracing(*pos, dots):
                             needed_figure = sample
-                            min_x = np.min([dot[0] for dot in dots])
-                            max_x = np.max([dot[0] for dot in dots])
-                            min_y = np.min([dot[1] for dot in dots])
-                            max_y = np.max([dot[1] for dot in dots])
-                            left_top = -np.array([min_x, min_y])
-                            right_bot = np.array(
-                                [SCREEN_WIDTH - 100 - max_x,
-                                 SCREEN_HEIGHT - max_y]
-                            )
+                            prim_center = get_polygon_center(dots)
+                            break
+                elif sb_isPressed:
+                    for sample in reversed(all_dots[:-1]):
+                        dots = get_dots_coordinates(sample[0])
+                        if ray_tracing(*pos, dots):
+                            needed_figure = sample
+                            prim_center = get_polygon_center(dots)
                             break
             else:
                 break
         if event.type == pygame.MOUSEBUTTONUP:
             needed_figure = None
+            prim_center = None
         if event.type == pygame.QUIT:
             pygame.quit()
 
-    if mb_isPressed and needed_figure is not None:
+    if needed_figure is not None:
         final_pos = pygame.mouse.get_pos()
-        delta = np.array(final_pos) - np.array(pos)
-        delta[0] = np.clip(delta[0], left_top[0], right_bot[0])
-        delta[1] = np.clip(delta[1], left_top[1], right_bot[1])
-        pos = final_pos
-        for dot in needed_figure[0]:
-            dot.translate(delta)
-        left_top -= delta
-        right_bot -= delta
+        if mb_isPressed:
+            delta = np.array(final_pos) - np.array(pos)
+            delta[0] = np.clip(delta[0], left_top[0], right_bot[0])
+            delta[1] = np.clip(delta[1], left_top[1], right_bot[1])
+            pos = final_pos
+            for dot in needed_figure[0]:
+                dot.translate(delta)
+            left_top -= delta
+            right_bot -= delta
 
-    if rb_isPressed and needed_figure is not None:
-        final_pos = pygame.mouse.get_pos()
-        center = get_polygon_center(dots)
-        dots = get_dots_coordinates(all_dots[0][0])
-        angle = pos[1] - final_pos[1]
-        rotated_polygon = rotate_polygon(points=dots, degrees=angle)
-        for ind, dot in enumerate(needed_figure[0]):
-            dot.rotate(rotated_polygon[ind])
-        pos = pygame.mouse.get_pos()
+        if rb_isPressed:
+            dots = get_dots_coordinates(needed_figure[0])
+            center = get_polygon_center(dots)
+            diff = np.array(prim_center) - np.array(center)
+            angle = final_pos[1] - pos[1]
+            for ind, dot in enumerate(needed_figure[0]):
+                final_coord = rotate(center, dots[ind], angle / 20)
+                dot.rotate(final_coord)
+                dot.translate(diff)
+            pos = pygame.mouse.get_pos()
+
+        if sb_isPressed:
+            dots = np.array(get_dots_coordinates(needed_figure[0]))
+            mouse_difference = final_pos[1] - pos[1]
+            for ind, dot in enumerate(needed_figure[0]):
+                coord_diff = np.array(dots[ind] - prim_center)
+                if mouse_difference > 0:
+                    if coord_diff[0] < 0 and coord_diff[1] > 0:
+                        dot.translate(np.array((-1, 1)))
+                    if coord_diff[0] > 0 and coord_diff[1] > 0:
+                        dot.translate(np.array((1, 1)))
+                    if coord_diff[0] > 0 and coord_diff[1] < 0:
+                        dot.translate(np.array((1, -1)))
+                    if coord_diff[0] < 0 and coord_diff[1] < 0:
+                        dot.translate(np.array((-1, -1)))
+                if mouse_difference < 0:
+                    if coord_diff[0] < 0 and coord_diff[1] > 0:
+                        dot.translate(np.array((1, -1)))
+                    if coord_diff[0] > 0 and coord_diff[1] > 0:
+                        dot.translate(np.array((-1, -1)))
+                    if coord_diff[0] > 0 and coord_diff[1] < 0:
+                        dot.translate(np.array((-1, 1)))
+                    if coord_diff[0] < 0 and coord_diff[1] < 0:
+                        dot.translate(np.array((1, 1)))
+            pos = pygame.mouse.get_pos()
 
     screen.fill(COLORS['WHITE'])
     menu_rect = pygame.Rect(SCREEN_WIDTH-100, 0, 100, SCREEN_HEIGHT)
