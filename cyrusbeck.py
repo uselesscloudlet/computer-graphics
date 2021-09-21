@@ -294,11 +294,11 @@ while True:
         final_pos = pygame.mouse.get_pos()
         center = get_polygon_center(dots)
         dots = get_dots_coordinates(all_dots[0][0])
-        angle = final_pos[1] - pos[1]
+        angle = pos[1] - final_pos[1]
         rotated_polygon = rotate_polygon(points=dots, degrees=angle)
         for ind, dot in enumerate(needed_figure[0]):
-            print(f'{dot} => {rotated_polygon[ind]}')
             dot.rotate(rotated_polygon[ind])
+        pos = pygame.mouse.get_pos()
 
     screen.fill(COLORS['WHITE'])
     menu_rect = pygame.Rect(SCREEN_WIDTH-100, 0, 100, SCREEN_HEIGHT)
