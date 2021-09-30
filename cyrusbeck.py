@@ -46,6 +46,65 @@ class Dot(pygame.sprite.Sprite):
         self.rect.center = (new_x, new_y)
 
 
+def dot_f(dot1, dot2):
+    return dot1[0] * dot2[0] + dot1[1] * dot2[1]
+
+
+def cyrus_beck(figure, line):
+    figure_len = len(figure)
+    normals = []
+    # Считаем нормали
+    for i in np.arange(figure_len):
+        x = figure[i][1] - figure[(i + 1) % figure_len][1]
+        y = figure[(i + 1) % figure_len][0] - figure[i][0]
+        normals.append((x, y))
+    P1_P0 = (line[1][0] - line[0][0], line[1][1] - line[0][1])
+
+    P0_PEi = []
+    for i in np.arange(figure_len):
+        a = figure[i][0] - line[0][0]
+        b = figure[i][1] - line[0][1]
+        P0_PEi.append((a, b))
+
+    numerator = []
+    denominator = []
+
+    for i in np.arange(figure_len):
+        numerator.append(dot_f(normals[i], P0_PEi[i]))
+        denominator.append(dot_f(normals[i], P1_P0))
+
+    t = []
+    tE = []
+    tL = []
+
+    for i in np.arange(figure_len):
+        t.append(numerator[i] / denominator[i])
+
+        if denominator[i] > 0:
+            tE.append(t[i])
+        else:
+            tL.append(t[i])
+
+    temp = []
+    tE.append(0)
+    tL.append(1)
+    tE_max = np.max(tE)
+    temp.append(tE_max)
+    tL_min = np.min(tL)
+    temp.append(tL_min)
+
+    if temp[0] > temp[1]:
+        print('Линия снаружи')
+        return
+
+    new_dot_1 = (line[0][0] + P1_P0[0] * temp[0],
+                 line[0][1] + P1_P0[1] * temp[0])
+    new_dot_2 = (line[0][0] + P1_P0[0] * temp[1],
+                 line[0][1] + P1_P0[1] * temp[1])
+
+    return new_dot_1, new_dot_2
+
+
 def get_dots_coordinates(group):
     dots_list = group.sprites()
     dots_centers = []
@@ -60,61 +119,86 @@ def pressed_button(button):
     global rb_isPressed
     global sb_isPressed
     global tb_isPressed
+    global cbb_isPressed
     if button == 'db':
         draw_button.setInactiveColour((0, 250, 154))
         move_button.setInactiveColour((169, 169, 169))
         rotate_button.setInactiveColour((169, 169, 169))
         scale_button.setInactiveColour((169, 169, 169))
         tabulate_button.setInactiveColour((169, 169, 169))
+        cyrus_beck_button.setInactiveColour((169, 169, 169))
         db_isPressed = True
         mb_isPressed = False
         rb_isPressed = False
         sb_isPressed = False
         tb_isPressed = False
+        cbb_isPressed = False
     elif button == 'mb':
         draw_button.setInactiveColour((169, 169, 169))
         move_button.setInactiveColour((0, 250, 154))
         rotate_button.setInactiveColour((169, 169, 169))
         scale_button.setInactiveColour((169, 169, 169))
         tabulate_button.setInactiveColour((169, 169, 169))
+        cyrus_beck_button.setInactiveColour((169, 169, 169))
         db_isPressed = False
         mb_isPressed = True
         rb_isPressed = False
         sb_isPressed = False
         tb_isPressed = False
+        cbb_isPressed = False
     elif button == 'rb':
         draw_button.setInactiveColour((169, 169, 169))
         move_button.setInactiveColour((169, 169, 169))
         rotate_button.setInactiveColour((0, 250, 154))
         scale_button.setInactiveColour((169, 169, 169))
         tabulate_button.setInactiveColour((169, 169, 169))
+        cyrus_beck_button.setInactiveColour((169, 169, 169))
         db_isPressed = False
         mb_isPressed = False
         rb_isPressed = True
         sb_isPressed = False
         tb_isPressed = False
+        cbb_isPressed = False
+        cyrus_beck_button.setInactiveColour((169, 169, 169))
     elif button == 'sb':
         draw_button.setInactiveColour((169, 169, 169))
         move_button.setInactiveColour((169, 169, 169))
         rotate_button.setInactiveColour((169, 169, 169))
         scale_button.setInactiveColour((0, 250, 154))
         tabulate_button.setInactiveColour((169, 169, 169))
+        cyrus_beck_button.setInactiveColour((169, 169, 169))
         db_isPressed = False
         mb_isPressed = False
         rb_isPressed = False
         sb_isPressed = True
         tb_isPressed = False
+        cbb_isPressed = False
     elif button == 'tb':
         draw_button.setInactiveColour((169, 169, 169))
         move_button.setInactiveColour((169, 169, 169))
         rotate_button.setInactiveColour((169, 169, 169))
         scale_button.setInactiveColour((169, 169, 169))
         tabulate_button.setInactiveColour((0, 250, 154))
+        cyrus_beck_button.setInactiveColour((169, 169, 169))
         db_isPressed = False
         mb_isPressed = False
         rb_isPressed = False
         sb_isPressed = False
         tb_isPressed = True
+        cbb_isPressed = False
+    elif button == 'cbb':
+        draw_button.setInactiveColour((169, 169, 169))
+        move_button.setInactiveColour((169, 169, 169))
+        rotate_button.setInactiveColour((169, 169, 169))
+        scale_button.setInactiveColour((169, 169, 169))
+        tabulate_button.setInactiveColour((169, 169, 169))
+        cyrus_beck_button.setInactiveColour((0, 250, 154))
+        db_isPressed = False
+        mb_isPressed = False
+        rb_isPressed = False
+        sb_isPressed = False
+        tb_isPressed = False
+        cbb_isPressed = True
 
 
 def ray_tracing(x, y, poly):
@@ -162,8 +246,10 @@ clock = pygame.time.Clock()
 
 dots_group = pygame.sprite.Group()
 group_counter = 0
+click_count = 0
 all_dots = [(dots_group, np.array(COLORS['GREEN']), group_counter)]
 needed_figure = None
+cb_figure = None
 left_top = None
 right_bot = None
 font = pygame.font.Font(None, 26)
@@ -173,6 +259,7 @@ mb_isPressed = False
 rb_isPressed = False
 sb_isPressed = False
 tb_isPressed = False
+cbb_isPressed = False
 
 draw_button = Button(win=screen,
                      x=SCREEN_WIDTH-100,
@@ -225,7 +312,17 @@ tabulate_button = Button(win=screen,
                          hoverColour=(128, 128, 128),
                          pressedColour=(105, 105, 105),
                          onClick=lambda: pressed_button('tb'))
-prim_center = None
+cyrus_beck_button = Button(win=screen,
+                           x=SCREEN_WIDTH-100,
+                           y=250,
+                           width=100,
+                           height=50,
+                           text='CYRUS-BECK',
+                           inactiveColour=(169, 169, 169),
+                           hoverColour=(128, 128, 128),
+                           pressedColour=(105, 105, 105),
+                           onClick=lambda: pressed_button('cbb'))
+
 while True:
     clock.tick(FPS)
     events = pygame.event.get()
@@ -285,6 +382,26 @@ while True:
                             lowest_figure = figure
                     idx = all_dots.index(needed_figures[0])
                     all_dots.insert(0, all_dots.pop(idx))
+                elif cbb_isPressed:
+                    if event.button == 1:
+                        if click_count == 0:
+                            for sample in reversed(all_dots[:-1]):
+                                dots = get_dots_coordinates(sample[0])
+                                if ray_tracing(*pos, dots):
+                                    cb_figure = dots
+                                    break
+                        elif click_count == 1:
+                            pos1 = pos
+                        elif click_count == 2:
+                            pos2 = pos
+                            line = cyrus_beck(cb_figure, (pos1, pos2))
+                            print(line)
+                            pygame.draw.aalines(screen, COLORS['RED'], True, line)
+                            click_count = 0
+                        click_count += 1
+                    if event.button == 3:
+                        # очищаем все линии, которые нарисовали
+                        pass
             else:
                 break
         if event.type == pygame.MOUSEBUTTONUP:
@@ -336,6 +453,7 @@ while True:
     for sample in all_dots:
         dots = get_dots_coordinates(sample[0])
         if len(dots) == 2:
+            print(dots)
             pygame.draw.aalines(screen, sample[1], True, dots)
         elif len(dots) > 2:
             pygame.gfxdraw.aapolygon(screen, dots, sample[1])
