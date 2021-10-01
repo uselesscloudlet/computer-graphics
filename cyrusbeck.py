@@ -46,63 +46,36 @@ class Dot(pygame.sprite.Sprite):
         self.rect.center = (new_x, new_y)
 
 
-def dot_f(dot1, dot2):
-    return dot1[0] * dot2[0] + dot1[1] * dot2[1]
-
-
 def cyrus_beck(figure, line):
     figure_len = len(figure)
-    normals = []
-    # Считаем нормали
-    for i in np.arange(figure_len):
+    D = np.array(line[1]) - np.array(line[0])
+    pei = []
+    normal = []
+    for i in range(figure_len):
+        pei.append(figure[i])
         x = figure[i][1] - figure[(i + 1) % figure_len][1]
         y = figure[(i + 1) % figure_len][0] - figure[i][0]
-        normals.append((x, y))
-    P1_P0 = (line[1][0] - line[0][0], line[1][1] - line[0][1])
-
-    P0_PEi = []
-    for i in np.arange(figure_len):
-        a = figure[i][0] - line[0][0]
-        b = figure[i][1] - line[0][1]
-        P0_PEi.append((a, b))
-
-    numerator = []
-    denominator = []
-
-    for i in np.arange(figure_len):
-        numerator.append(dot_f(normals[i], P0_PEi[i]))
-        denominator.append(dot_f(normals[i], P1_P0))
-
-    t = []
-    tE = []
-    tL = []
-
-    for i in np.arange(figure_len):
-        t.append(numerator[i] / denominator[i])
-
-        if denominator[i] > 0:
-            tE.append(t[i])
-        else:
-            tL.append(t[i])
-
-    temp = []
-    tE.append(0)
-    tL.append(1)
-    tE_max = np.max(tE)
-    temp.append(tE_max)
-    tL_min = np.min(tL)
-    temp.append(tL_min)
-
-    if temp[0] > temp[1]:
+        normal.append((x, y))
+    t = 0
+    tE = 0
+    tL = 1
+    for i in range(figure_len):
+        dot_prod = np.dot(normal[i], D)
+        if dot_prod != 0:
+            diff = np.array(line[0]) - np.array(pei[i])
+            t = np.dot(normal[i], diff) / (-dot_prod)
+            if dot_prod < 0:
+                tE = np.maximum(tE, t)
+            else:
+                tL = np.minimum(tL, t)
+    if tE > tL:
         print('Линия снаружи')
         return
-
-    new_dot_1 = (line[0][0] + P1_P0[0] * temp[0],
-                 line[0][1] + P1_P0[1] * temp[0])
-    new_dot_2 = (line[0][0] + P1_P0[0] * temp[1],
-                 line[0][1] + P1_P0[1] * temp[1])
-
-    return new_dot_1, new_dot_2
+    l1 = np.array(line[0])
+    l2 = np.array(line[1])
+    p1 = l1 + (l2 - l1) * tE
+    p2 = l1 + (l2 - l1) * tL
+    return p1, p2
 
 
 def get_dots_coordinates(group):
@@ -245,6 +218,7 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 clock = pygame.time.Clock()
 
 dots_group = pygame.sprite.Group()
+cb_points = pygame.sprite.Group()
 group_counter = 0
 click_count = 0
 all_dots = [(dots_group, np.array(COLORS['GREEN']), group_counter)]
@@ -252,6 +226,7 @@ needed_figure = None
 cb_figure = None
 left_top = None
 right_bot = None
+line = None
 font = pygame.font.Font(None, 26)
 
 db_isPressed = True
@@ -331,6 +306,11 @@ while True:
         if event.type == pygame.MOUSEBUTTONDOWN:
             pos = pygame.mouse.get_pos()
             if pos[0] < SCREEN_WIDTH - 100:
+                if not cbb_isPressed:
+                    click_count = 0
+                    cb_points.empty()
+                    cb_figure = None
+                    line = None
                 if db_isPressed:
                     if event.button == 1:
                         all_dots[group_counter][0].add(Dot(*pos))
@@ -392,16 +372,19 @@ while True:
                                     break
                         elif click_count == 1:
                             pos1 = pos
+                            cb_points.add(Dot(*pos1))
                         elif click_count == 2:
                             pos2 = pos
+                            cb_points.add(Dot(*pos2))
                             line = cyrus_beck(cb_figure, (pos1, pos2))
-                            print(line)
-                            pygame.draw.aalines(screen, COLORS['RED'], True, line)
-                            click_count = 0
                         click_count += 1
+                        if not cb_figure:
+                            click_count = 0
                     if event.button == 3:
-                        # очищаем все линии, которые нарисовали
-                        pass
+                        click_count = 0
+                        cb_points.empty()
+                        cb_figure = None
+                        line = None
             else:
                 break
         if event.type == pygame.MOUSEBUTTONUP:
@@ -453,7 +436,6 @@ while True:
     for sample in all_dots:
         dots = get_dots_coordinates(sample[0])
         if len(dots) == 2:
-            print(dots)
             pygame.draw.aalines(screen, sample[1], True, dots)
         elif len(dots) > 2:
             pygame.gfxdraw.aapolygon(screen, dots, sample[1])
@@ -461,6 +443,11 @@ while True:
         sample[0].draw(screen)
     fps_text = font.render(
         f'FPS: {np.round(clock.get_fps())}', True, COLORS['WHITE'])
+    if line:
+        pygame.draw.aalines(screen, COLORS['RED'], True, line)
+    if cb_points:
+        cb_points.draw(screen)
+
     place = fps_text.get_rect(center=(SCREEN_WIDTH - 50, SCREEN_HEIGHT - 20))
     screen.blit(fps_text, place)
     pw.update(events)
