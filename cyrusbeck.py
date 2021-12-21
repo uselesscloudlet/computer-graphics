@@ -3,6 +3,7 @@ import pygame.gfxdraw
 import pygame_widgets as pw
 from pygame_widgets.button import Button
 import numpy as np
+import tripy
 
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 512
@@ -68,8 +69,14 @@ def cyrus_beck(figure, line):
                 tE = np.maximum(tE, t)
             else:
                 tL = np.minimum(tL, t)
+        else:
+            a = figure[i]
+            b = figure[(i + 1) % figure_len]
+            c = line[0]
+            if (b[0] - a[0]) * (c[1] - a[1]) * (c[0] - a[0]) < 0:
+                tE = 1
+                tL = -1
     if tE > tL:
-        print('Линия снаружи')
         return
     l1 = np.array(line[0])
     l2 = np.array(line[1])
@@ -221,12 +228,12 @@ dots_group = pygame.sprite.Group()
 cb_points = pygame.sprite.Group()
 group_counter = 0
 click_count = 0
-all_dots = [(dots_group, np.array(COLORS['GREEN']), group_counter)]
+all_dots = [(dots_group, np.array(COLORS['BLACK']), group_counter)]
 needed_figure = None
 cb_figure = None
 left_top = None
 right_bot = None
-line = None
+lines = None
 font = pygame.font.Font(None, 26)
 
 db_isPressed = True
@@ -246,7 +253,6 @@ draw_button = Button(win=screen,
                      hoverColour=(128, 128, 128),
                      pressedColour=(105, 105, 105),
                      onClick=lambda: pressed_button('db'))
-
 move_button = Button(win=screen,
                      x=SCREEN_WIDTH-100,
                      y=50,
@@ -310,16 +316,16 @@ while True:
                     click_count = 0
                     cb_points.empty()
                     cb_figure = None
-                    line = None
+                    lines = None
                 if db_isPressed:
                     if event.button == 1:
                         all_dots[group_counter][0].add(Dot(*pos))
                     elif event.button == 3:
                         dots_group = pygame.sprite.Group()
-                        rand_color = np.random.randint(0, 255, 3)
+                        color = COLORS['BLACK']
                         group_counter += 1
                         all_dots.append(
-                            (dots_group, rand_color, group_counter))
+                            (dots_group, color, group_counter))
                 elif mb_isPressed:
                     for sample in reversed(all_dots[:-1]):
                         dots = get_dots_coordinates(sample[0])
@@ -376,7 +382,13 @@ while True:
                         elif click_count == 2:
                             pos2 = pos
                             cb_points.add(Dot(*pos2))
-                            line = cyrus_beck(cb_figure, (pos1, pos2))
+                            
+                            cb_triangles = [tuple(reversed(dts)) for dts in tripy.earclip(cb_figure)]
+                            lines = []
+                            for triangle in cb_triangles:
+                                lines.append(cyrus_beck(triangle, (pos1, pos2)))
+                            lines = np.array([line for line in lines if line is not None], dtype=int).tolist()
+                            print(lines)
                         click_count += 1
                         if not cb_figure:
                             click_count = 0
@@ -384,7 +396,7 @@ while True:
                         click_count = 0
                         cb_points.empty()
                         cb_figure = None
-                        line = None
+                        lines = None
             else:
                 break
         if event.type == pygame.MOUSEBUTTONUP:
@@ -436,15 +448,15 @@ while True:
     for sample in all_dots:
         dots = get_dots_coordinates(sample[0])
         if len(dots) == 2:
-            pygame.draw.aalines(screen, sample[1], True, dots)
+            pygame.draw.aalines(screen, sample[1], False, dots, blend=1)
         elif len(dots) > 2:
             pygame.gfxdraw.aapolygon(screen, dots, sample[1])
-            pygame.gfxdraw.filled_polygon(screen, dots, sample[1])
         sample[0].draw(screen)
     fps_text = font.render(
         f'FPS: {np.round(clock.get_fps())}', True, COLORS['WHITE'])
-    if line:
-        pygame.draw.aalines(screen, COLORS['RED'], True, line)
+    if lines is not None:
+        for line in lines:
+            pygame.draw.aalines(screen, COLORS['RED'], True, line)
     if cb_points:
         cb_points.draw(screen)
 
