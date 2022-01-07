@@ -388,7 +388,6 @@ while True:
                             for triangle in cb_triangles:
                                 lines.append(cyrus_beck(triangle, (pos1, pos2)))
                             lines = np.array([line for line in lines if line is not None], dtype=int).tolist()
-                            print(lines)
                         click_count += 1
                         if not cb_figure:
                             click_count = 0
