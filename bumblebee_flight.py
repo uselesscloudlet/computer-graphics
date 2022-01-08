@@ -1,4 +1,5 @@
 import pygame
+from pygame import draw
 import pygame_widgets
 from pygame_widgets.button import Button, ButtonArray
 import numpy as np
@@ -332,29 +333,27 @@ class Simulation():
             )
         return np.dstack(channels)
 
+    def binterpolation(self, x, y, points):
+        pts = sorted(points)
+        (x1, y1, q11), (_x1, y2, q12), (x2, _y1, q21), (_x2, _y2, q22) = pts
+
+        # if x1 != _x1 or x2 != _x2 or y1 != _y1 or y2 != _y2:
+        #     print('The given points do not form a rectangle')
+        #     raise "NO"
+
+        P = (q11 * (x2 - x) * (y2 - y) +
+             q21 * (x - x1) * (y2 - y) +
+             q12 * (x2 - x) * (y - y1) +
+             q22 * (x - x1) * (y - y1)
+             ) / ((x2 - x1) * (y2 - y1) + 0.01)
+
+        return P
+
     def run(self):
         self.add_cube_btn()
-        point_lights = [PointLight(Point3D(50, 5, 0), [1, 1, 0]), PointLight(
-            Point3D(-50, 5, 0), [0, 0, 1])]
-        def ray_tracing(x, y, poly):
-            n = len(poly)
-            inside = False
-            p2x = 0.0
-            p2y = 0.0
-            xints = 0.0
-            p1x, p1y = poly[0]
-            for i in range(n + 1):
-                p2x, p2y = poly[i % n]
-                if y > np.minimum(p1y, p2y):
-                    if y <= np.maximum(p1y, p2y):
-                        if x <= np.maximum(p1x, p2x):
-                            if p1y != p2y:
-                                xints = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-                            if p1x == p2x or x <= xints:
-                                inside = not inside
-                p1x, p1y = p2x, p2y
-
-            return inside
+        point_lights = [PointLight(Point3D(50, 5, 0), [0, 1, 0]), PointLight(
+            Point3D(-50, 5, 0), [0, 0, 1]), PointLight(
+            Point3D(0, -5, 0), [1, 0, 0])]
         while True:
             self.clock.tick(FPS)
             self.screen.fill(Color.WHITE.value)
@@ -363,6 +362,7 @@ class Simulation():
                 if event.type == pygame.QUIT:
                     pygame.quit()
             keys = pygame.key.get_pressed()
+            draw_buffer = np.full((SCREEN_WIDTH, SCREEN_HEIGHT, 3), 100)
             for obj in self._objects:
                 polygons = obj.draw_cube(point_lights)
                 t_vertices = obj.transform_vertices()
@@ -376,54 +376,80 @@ class Simulation():
                         pygame.draw.polygon(
                             self.screen, obj.lambert_colors[color], figure)
                     elif self.current_shading == Shading.GOURAUD:
-                        # pygame.draw.aalines(
-                        #     self.screen, Color.BLACK.value, True, figure)
                         x_min = int(figure[:, 0].min())
                         y_min = int(figure[:, 1].min())
                         x_max = int(figure[:, 0].max())
                         y_max = int(figure[:, 1].max())
-                        
+
                         x_delta = x_max - x_min + 1
                         y_delta = y_max - y_min + 1
+
+                        rr, cc = skimage.draw.polygon(
+                            figure[:, 0] - x_min, figure[:, 1] - y_min)
+
+                        points_r = []
+                        points_g = []
+                        points_b = []
+
+                        corners = [[[], []], [[], []]]
                         
-                        rr, cc = skimage.draw.polygon(figure[:, 0] - x_min, figure[:, 1] - y_min)
-                        mask = np.zeros((x_delta, y_delta))
-                        mask[rr, cc] = 1
+                        for i, v in enumerate(obj.faces[color]):
+                            pos = t_vertices[v]
+                            c = obj.gouraud_colors[v]
+
+                            x = 0 if abs(
+                                pos.x - x_min) < abs(pos.x - x_max) else 1
+                            y = 0 if abs(
+                                pos.y - y_min) < abs(pos.y - y_max) else 1
+                            
+                            
+
+                            corners[x][y].append(c)
+
+                            
+
+                        for x in [0, 1]:
+                            for y in [0, 1]:
+                                if len(corners[x][y]) > 0:
+                                    corners[x][y] = np.mean(corners[x][y], axis=0)
+                        for x in [0, 1]:
+                            for y in [0, 1]:
+                                if len(corners[x][y]) == 0:
+                                    if len(corners[(x + 1) % 2][y]) == 0:
+                                        corners[x][y] = corners[x][(y + 1) % 2]
+                                    elif len(corners[x][(y + 1) % 2]) == 0:
+                                        corners[x][y] = corners[(x + 1) % 2][y]
+                                    else:
+                                        corners[x][y] = np.mean([corners[(x + 1) % 2][y], corners[x][(y + 1) % 2]], axis=0)
+
+
+                        points_r.append((0, 0, corners[0][0][0]))
+                        points_r.append((x_delta, 0, corners[1][0][0]))
+                        points_r.append((x_delta, y_delta, corners[1][1][0]))
+                        points_r.append((0, y_delta, corners[0][1][0]))
                         
-                        coeff = 1
-                        #print(color)
-                        # colors = np.zeros((x_delta, y_delta, 3))
-                        # for x in range(0, x_delta, coeff):
-                        #     for y in range(0, y_delta, coeff):
- 
-                                #colors[x][y] += 
+                        points_g.append((0, 0, corners[0][0][1]))
+                        points_g.append((x_delta, 0, corners[1][0][1]))
+                        points_g.append((x_delta, y_delta, corners[1][1][1]))
+                        points_g.append((0, y_delta, corners[0][1][1]))
                         
-                        for x in range(0, x_delta, coeff):
-                            for y in range(0, y_delta, coeff):
-                                if mask[x][y]:
-                                    vert_dists = []
-                                    vert_colors = []
-                                    for v in obj.faces[color]:
-                                        pos = t_vertices[v]
-                                        c = obj.gouraud_colors[v]
-                                        dist = np.sqrt((x_min + x - pos.x) ** 2 + (y_min + y - pos.y) ** 2)
-                                        vert_colors.append(c)
-                                        vert_dists.append(dist)
-                                    vert_colors = np.array(vert_colors, dtype=float)
-                                    vert_dists = np.array(vert_dists, dtype=float)
-                                    vert_dists = np.log(vert_dists)
-                                    vert_dists /= vert_dists.max()
-                                    
-                                    for i in range(len(vert_colors)):
-                                        vert_colors[i] /= vert_dists[i]
-                                    c = np.mean(vert_colors, 0)
-                                    #print(color, vert_dists)
-                                
-                                    pygame.draw.rect(self.screen,  np.maximum(np.minimum(c, 255), 0), ((x_min + x - coeff / 2, y_min + y - coeff / 2, coeff, coeff)))
-                                    # self.screen.set_at(
-                                    #     (x_min + x, y_min + y), colors[x, y])
-                        # print(x_min, y_min, x_max, y_max)
-                        #gradient = generate_gradient((63, 95, 127), (195, 195, 255), 1024, 600)
+                        points_b.append((0, 0, corners[0][0][2]))
+                        points_b.append((x_delta, 0, corners[1][0][2]))
+                        points_b.append((x_delta, y_delta, corners[1][1][2]))
+                        points_b.append((0, y_delta, corners[0][1][2]))
+                            
+                        X = np.repeat(np.arange(x_delta), y_delta)
+                        Y = np.array([*range(y_delta)] * x_delta)
+
+                        rs = np.clip(self.binterpolation(
+                            X, Y, points_r), 0, 255)
+                        gs = np.clip(self.binterpolation(
+                            X, Y, points_g), 0, 255)
+                        bs = np.clip(self.binterpolation(
+                            X, Y, points_b), 0, 255)
+                        
+                        
+                        draw_buffer[x_min + rr, y_min + cc] = np.array([rs[rr * y_delta + cc], gs[rr * y_delta + cc], bs[rr * y_delta + cc]]).T
 
                 if keys[pygame.K_F1]:
                     self.current_mode = Mode.ROTATING
@@ -459,6 +485,10 @@ class Simulation():
                     elif keys[pygame.K_e]:
                         obj.translate_cube(0, 0.05, 0)
 
+            if self.current_shading == Shading.GOURAUD:
+                surf = pygame.surfarray.make_surface(draw_buffer)
+                self.screen.blit(surf, (0, 0))
+            
             font = pygame.font.Font(None, 26)
             fps_text = font.render(
                 f'FPS: {np.round(self.clock.get_fps())}', True, Color.BLACK.value)
