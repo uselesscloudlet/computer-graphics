@@ -107,14 +107,12 @@ class Cube():
         # self.colors = [(np.random.randint(0, 255, 3)) for _ in np.arange(6)]
         self.angles = [0, 0, 0]
         self.pos = [0, 0, 0]
-        self.colors = [0] * 6
+        self.colors = np.zeros((len(self.faces), 3), dtype=int)
 
     def lambert_make_color(self, point_lights):
         intensities = self.lambert_lighting(point_lights)
-        #print(intensities)
         for i in range(len(self.colors)):
             self.colors[i] = intensities[i] * 255
-        #print(self.colors)
 
     def draw_cube(self, point_lights):
         t_vertices = self.transform_vertices()
@@ -163,7 +161,6 @@ class Cube():
             else:
                 projection = rotation
             t_vertices.append(projection)
-        # print(f'{self.vertices} -> {t_vertices}')
         return t_vertices
 
     def calculate_avg_z(self, vertices):
@@ -189,7 +186,6 @@ class Cube():
                 ) / np.linalg.norm(light_vectors[i].to_arr())
                 normal = normals[i] / np.linalg.norm(normals[i])
                 intensity_coef = np.maximum(np.dot(light_vector, normal), 0)
-                #print(intensity_coef)
                 for j in np.arange(3):
                     intensities[i][j] += 1 * light.color[j] * intensity_coef
         return np.array(intensities)
@@ -287,7 +283,7 @@ class Simulation():
                     figure = polygon[0]
                     color = polygon[1]
                     pygame.draw.polygon(self.screen, obj.colors[color], figure)
-                    pygame.draw.aalines(self.screen, Color.BLACK.value, True, figure)
+                    #pygame.draw.aalines(self.screen, Color.BLACK.value, True, figure)
                 if keys[pygame.K_UP]:
                     obj.rotate_cube(Direction.UP)
                 elif keys[pygame.K_DOWN]:
@@ -298,8 +294,6 @@ class Simulation():
                     obj.rotate_cube(Direction.RIGHT)
                 elif keys[pygame.K_F2]:
                     obj.translate_cube(0, 0.05, 0)
-                elif keys[pygame.K_F3]:
-                    obj.lambert_make_color()
 
             font = pygame.font.Font(None, 26)
             fps_text = font.render(
