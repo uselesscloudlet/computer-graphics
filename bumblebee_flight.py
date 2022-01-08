@@ -37,7 +37,7 @@ class Shading(Enum):
 
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 512
-FOV = 260
+FOV = 90
 VIEWER_DISTANCE = 4
 FPS = 60
 
@@ -349,6 +349,33 @@ class Simulation():
 
         return P
 
+    def trainglething(self, x, y, points):
+        pts = points
+        #print(points)
+        (x1, y1, q1), (x2, y2, q2), (x3, y3, q3), (_x, _y, _z) = pts
+        w1 = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
+        w2 = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
+        w3 = 1 - w1 - w2
+        
+        p1 = np.array([x1, y1])
+        res1 = q1 * w1 + q2 * w2 + q3 * w3
+        
+        (x1, y1, q1), (_x, _y, _q), (x3, y3, q3), (x2, y2, q2) = pts
+        w1 = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
+        w2 = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
+        w3 = 1 - w1 - w2
+        
+        
+        p2 = np.array([x3, y3])
+        res2 = q1 * w1 + q2 * w2 + q3 * w3
+                
+        above = np.cross(np.array(list(zip(x, y))) - p1, p1 - p2) < 0
+        
+    
+        #return np.where(above, np.full_like(res1, 255), np.full_like(res2, 0))
+        return np.where(above, res1, res2)
+
+
     def run(self):
         self.add_cube_btn()
         point_lights = [PointLight(Point3D(50, 5, 0), [0, 1, 0]), PointLight(
@@ -403,7 +430,9 @@ class Simulation():
                                 pos.y - y_min) < abs(pos.y - y_max) else 1
                             
                             
-
+                            points_r.append((pos.x - x_min, pos.y - y_min, c))
+                            points_g.append((pos.x - x_min, pos.y - y_min, c[1]))
+                            points_b.append((pos.x - x_min, pos.y - y_min, c[2]))
                             corners[x][y].append(c)
 
                             
@@ -423,31 +452,35 @@ class Simulation():
                                         corners[x][y] = np.mean([corners[(x + 1) % 2][y], corners[x][(y + 1) % 2]], axis=0)
 
 
-                        points_r.append((0, 0, corners[0][0][0]))
-                        points_r.append((x_delta, 0, corners[1][0][0]))
-                        points_r.append((x_delta, y_delta, corners[1][1][0]))
-                        points_r.append((0, y_delta, corners[0][1][0]))
+                        # points_r.append((0, 0, corners[0][0][0]))
+                        # points_r.append((x_delta, 0, corners[1][0][0]))
+                        # points_r.append((x_delta, y_delta, corners[1][1][0]))
+                        # points_r.append((0, y_delta, corners[0][1][0]))
                         
-                        points_g.append((0, 0, corners[0][0][1]))
-                        points_g.append((x_delta, 0, corners[1][0][1]))
-                        points_g.append((x_delta, y_delta, corners[1][1][1]))
-                        points_g.append((0, y_delta, corners[0][1][1]))
+                        # points_g.append((0, 0, corners[0][0][1]))
+                        # points_g.append((x_delta, 0, corners[1][0][1]))
+                        # points_g.append((x_delta, y_delta, corners[1][1][1]))
+                        # points_g.append((0, y_delta, corners[0][1][1]))
                         
-                        points_b.append((0, 0, corners[0][0][2]))
-                        points_b.append((x_delta, 0, corners[1][0][2]))
-                        points_b.append((x_delta, y_delta, corners[1][1][2]))
-                        points_b.append((0, y_delta, corners[0][1][2]))
+                        # points_b.append((0, 0, corners[0][0][2]))
+                        # points_b.append((x_delta, 0, corners[1][0][2]))
+                        # points_b.append((x_delta, y_delta, corners[1][1][2]))
+                        # points_b.append((0, y_delta, corners[0][1][2]))
                             
                         X = np.repeat(np.arange(x_delta), y_delta)
                         Y = np.array([*range(y_delta)] * x_delta)
 
-                        rs = np.clip(self.binterpolation(
-                            X, Y, points_r), 0, 255)
-                        gs = np.clip(self.binterpolation(
-                            X, Y, points_g), 0, 255)
-                        bs = np.clip(self.binterpolation(
-                            X, Y, points_b), 0, 255)
+
+                        # rs = np.clip(self.binterpolation(
+                        #     X, Y, points_r), 0, 255)
+                        # gs = np.clip(self.binterpolation(
+                        #     X, Y, points_g), 0, 255)
+                        # bs = np.clip(self.binterpolation(
+                        #     X, Y, points_b), 0, 255)
                         
+                        rs = self.trainglething(X, Y, points_r)
+                        gs = self.trainglething(X, Y, points_g)
+                        bs = self.trainglething(X, Y, points_b)
                         
                         draw_buffer[x_min + rr, y_min + cc] = np.array([rs[rr * y_delta + cc], gs[rr * y_delta + cc], bs[rr * y_delta + cc]]).T
 
