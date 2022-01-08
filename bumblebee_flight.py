@@ -3,6 +3,7 @@ import pygame_widgets
 from pygame_widgets.button import Button, ButtonArray
 import numpy as np
 from enum import Enum
+import skimage.draw
 
 
 class Color(Enum):
@@ -24,6 +25,13 @@ class Direction(Enum):
     RIGHT = 1
     DOWN = 2
     LEFT = 3
+
+
+class Shading(Enum):
+    WIREFRAME = 0
+    LAMBERT = 1
+    GOURAUD = 2
+    PHONG = 3
 
 
 SCREEN_WIDTH = 1024
@@ -104,35 +112,53 @@ class Cube():
                       (4, 0, 3, 7),
                       (0, 4, 5, 1),
                       (3, 2, 6, 7)]
-        # self.colors = [(np.random.randint(0, 255, 3)) for _ in np.arange(6)]
+        # self.lambert_colors = [(np.random.randint(0, 255, 3)) for _ in np.arange(6)]
         self.angles = [0, 0, 0]
         self.pos = [0, 0, 0]
-        self.colors = np.zeros((len(self.faces), 3), dtype=int)
+        self.lambert_colors = np.zeros((len(self.faces), 3), dtype=int)
+        self.gouraud_colors = np.zeros((len(self.vertices), 3), dtype=int)
 
     def lambert_make_color(self, point_lights):
         intensities = self.lambert_lighting(point_lights)
-        for i in range(len(self.colors)):
-            self.colors[i] = intensities[i] * 255
+        for i in range(len(self.lambert_colors)):
+            self.lambert_colors[i] = intensities[i] * 255
+
+    def gouraud_make_color(self, point_lights):
+        intensities = self.gouraud_lighting(point_lights)
+        for i in range(len(self.gouraud_colors)):
+            self.gouraud_colors[i] = intensities[i] * 255
 
     def draw_cube(self, point_lights):
         t_vertices = self.transform_vertices()
+        tf_vertices = self.transform_vertices(True)
         self.lambert_make_color(point_lights)
+        self.gouraud_make_color(point_lights)
         avg_Z = self.calculate_avg_z(t_vertices)
         polygons = []
+
+        _, normals = self.get_c_and_norm(tf_vertices, True)
+        # print(self.pos)
+        pos = Point3D(*self.pos).project(0, 0, 0)
+        #vis = np.dot([self.pos[0], self.pos[1], -(VIEWER_DISTANCE + self.pos[2]), 0], normals.T)
+        vis = np.dot([pos.x, pos.y, pos.z + 100000, 0], normals.T)
+        # print([pos.x, pos.y, pos.z + 100000, 0])
+        # print(self.pos[2])
+        # print(avg_Z)
         for z_val in sorted(avg_Z, key=lambda x: x[1], reverse=True):
+            if vis[z_val[0]] >= 0:
+                continue
+            if (z_val[1] + self.pos[2]) < (-VIEWER_DISTANCE + 1.5):
+                continue
             f_index = z_val[0]
             f = self.faces[f_index]
-            point_list = [
+
+            point_list = np.array([
                 (t_vertices[f[0]].x, t_vertices[f[0]].y),
                 (t_vertices[f[1]].x, t_vertices[f[1]].y),
-                (t_vertices[f[1]].x, t_vertices[f[1]].y),
-                (t_vertices[f[2]].x, t_vertices[f[2]].y),
                 (t_vertices[f[2]].x, t_vertices[f[2]].y),
                 (t_vertices[f[3]].x, t_vertices[f[3]].y),
-                (t_vertices[f[3]].x, t_vertices[f[3]].y),
-                (t_vertices[f[0]].x, t_vertices[f[0]].y)
-            ]
-            polygons.append((point_list, f_index))
+            ])
+            polygons.append((np.array(point_list), f_index))
         return polygons
 
     def translate_cube(self, x, y, z):
@@ -176,11 +202,10 @@ class Cube():
 
     def lambert_lighting(self, point_lights):
         intensities = np.zeros((len(self.faces), 3))
-        
+        transformed_vertices = self.transform_vertices(False)
+        centers, normals = self.get_c_and_norm(transformed_vertices)
         for light in point_lights:
-            transformed_vertices = self.transform_vertices(False)
-            centres, normals = self.get_c_and_norm(transformed_vertices)
-            light_vectors = [light.point - center for center in centres]
+            light_vectors = [light.point - center for center in centers]
             for i in np.arange(len(light_vectors)):
                 light_vector = light_vectors[i].to_arr(
                 ) / np.linalg.norm(light_vectors[i].to_arr())
@@ -190,9 +215,33 @@ class Cube():
                     intensities[i][j] += 1 * light.color[j] * intensity_coef
         return np.array(intensities)
 
-    def get_c_and_norm(self, transformed_vertices):
+    def gouraud_lighting(self, point_lights):
+        intensities = np.zeros((len(self.vertices), 3))
+        transformed_vertices = self.transform_vertices(False)
+        _, faces_normals = self.get_c_and_norm(transformed_vertices)
+        vertices_normals = []
+        for _ in range(len(self.vertices)):
+            vertices_normals.append([])
+        for i, face in enumerate(self.faces):
+            for j in face:
+                vertices_normals[j].append(faces_normals[i])
+        vertices_normals = np.mean(np.array(vertices_normals), 1)
+
+        for light in point_lights:
+            light_vectors = [light.point - vert for vert in self.vertices]
+            for i in np.arange(len(light_vectors)):
+                light_vector = light_vectors[i].to_arr(
+                ) / np.linalg.norm(light_vectors[i].to_arr())
+                normal = vertices_normals[i] / \
+                    np.linalg.norm(vertices_normals[i])
+                intensity_coef = np.maximum(np.dot(light_vector, normal), 0)
+                for j in np.arange(3):
+                    intensities[i][j] += 1 * light.color[j] * intensity_coef
+        return np.array(intensities)
+
+    def get_c_and_norm(self, transformed_vertices, return_d=False):
         normals = []
-        centres = []
+        centers = []
         for face in self.faces:
             sum_x = 0
             sum_y = 0
@@ -210,9 +259,14 @@ class Cube():
             v2 = p2 - p1
             normal = np.cross(v1, v2)
 
-            centres.append(center)
-            normals.append(normal)
-        return centres, normals
+            if return_d:
+                d = np.dot(normal, p1)
+                normals.append(np.array([*normal, d]))
+            else:
+                normals.append(normal)
+            centers.append(center)
+
+        return np.array(centers), np.array(normals)
 
 
 class Simulation():
@@ -222,6 +276,7 @@ class Simulation():
         self.screen = pygame.display.set_mode((screen_width, screen_height))
         self.clock = pygame.time.Clock()
         self.current_mode = Mode.ROTATING
+        self.current_shading = Shading.WIREFRAME
         self._objects = objects
 
     def add_cube_btn(self):
@@ -266,9 +321,40 @@ class Simulation():
         self.cubes_bttns()
         self._objects.append(Cube())
 
+    def generate_gradient(from_color, to_color, height, width):
+        channels = []
+        for channel in range(3):
+            from_value, to_value = from_color[channel], to_color[channel]
+            channels.append(
+                np.tile(
+                    np.linspace(from_value, to_value, width), [height, 1],
+                ),
+            )
+        return np.dstack(channels)
+
     def run(self):
         self.add_cube_btn()
-        point_lights = [PointLight(Point3D(5, 5, 0), [1, 1, 0]), PointLight(Point3D(-5, 5, 0), [0, 0, 1])]
+        point_lights = [PointLight(Point3D(50, 5, 0), [1, 1, 0]), PointLight(
+            Point3D(-50, 5, 0), [0, 0, 1])]
+        def ray_tracing(x, y, poly):
+            n = len(poly)
+            inside = False
+            p2x = 0.0
+            p2y = 0.0
+            xints = 0.0
+            p1x, p1y = poly[0]
+            for i in range(n + 1):
+                p2x, p2y = poly[i % n]
+                if y > np.minimum(p1y, p2y):
+                    if y <= np.maximum(p1y, p2y):
+                        if x <= np.maximum(p1x, p2x):
+                            if p1y != p2y:
+                                xints = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                            if p1x == p2x or x <= xints:
+                                inside = not inside
+                p1x, p1y = p2x, p2y
+
+            return inside
         while True:
             self.clock.tick(FPS)
             self.screen.fill(Color.WHITE.value)
@@ -279,21 +365,99 @@ class Simulation():
             keys = pygame.key.get_pressed()
             for obj in self._objects:
                 polygons = obj.draw_cube(point_lights)
-                for polygon in polygons:
+                t_vertices = obj.transform_vertices()
+                for poly_ind, polygon in enumerate(polygons):
                     figure = polygon[0]
                     color = polygon[1]
-                    pygame.draw.polygon(self.screen, obj.colors[color], figure)
-                    #pygame.draw.aalines(self.screen, Color.BLACK.value, True, figure)
-                if keys[pygame.K_UP]:
-                    obj.rotate_cube(Direction.UP)
-                elif keys[pygame.K_DOWN]:
-                    obj.rotate_cube(Direction.DOWN)
-                elif keys[pygame.K_LEFT]:
-                    obj.rotate_cube(Direction.LEFT)
-                elif keys[pygame.K_RIGHT]:
-                    obj.rotate_cube(Direction.RIGHT)
+                    if self.current_shading == Shading.WIREFRAME:
+                        pygame.draw.aalines(
+                            self.screen, Color.BLACK.value, True, figure)
+                    elif self.current_shading == Shading.LAMBERT:
+                        pygame.draw.polygon(
+                            self.screen, obj.lambert_colors[color], figure)
+                    elif self.current_shading == Shading.GOURAUD:
+                        # pygame.draw.aalines(
+                        #     self.screen, Color.BLACK.value, True, figure)
+                        x_min = int(figure[:, 0].min())
+                        y_min = int(figure[:, 1].min())
+                        x_max = int(figure[:, 0].max())
+                        y_max = int(figure[:, 1].max())
+                        
+                        x_delta = x_max - x_min + 1
+                        y_delta = y_max - y_min + 1
+                        
+                        rr, cc = skimage.draw.polygon(figure[:, 0] - x_min, figure[:, 1] - y_min)
+                        mask = np.zeros((x_delta, y_delta))
+                        mask[rr, cc] = 1
+                        
+                        coeff = 1
+                        #print(color)
+                        # colors = np.zeros((x_delta, y_delta, 3))
+                        # for x in range(0, x_delta, coeff):
+                        #     for y in range(0, y_delta, coeff):
+ 
+                                #colors[x][y] += 
+                        
+                        for x in range(0, x_delta, coeff):
+                            for y in range(0, y_delta, coeff):
+                                if mask[x][y]:
+                                    vert_dists = []
+                                    vert_colors = []
+                                    for v in obj.faces[color]:
+                                        pos = t_vertices[v]
+                                        c = obj.gouraud_colors[v]
+                                        dist = np.sqrt((x_min + x - pos.x) ** 2 + (y_min + y - pos.y) ** 2)
+                                        vert_colors.append(c)
+                                        vert_dists.append(dist)
+                                    vert_colors = np.array(vert_colors, dtype=float)
+                                    vert_dists = np.array(vert_dists, dtype=float)
+                                    vert_dists = np.log(vert_dists)
+                                    vert_dists /= vert_dists.max()
+                                    
+                                    for i in range(len(vert_colors)):
+                                        vert_colors[i] /= vert_dists[i]
+                                    c = np.mean(vert_colors, 0)
+                                    #print(color, vert_dists)
+                                
+                                    pygame.draw.rect(self.screen,  np.maximum(np.minimum(c, 255), 0), ((x_min + x - coeff / 2, y_min + y - coeff / 2, coeff, coeff)))
+                                    # self.screen.set_at(
+                                    #     (x_min + x, y_min + y), colors[x, y])
+                        # print(x_min, y_min, x_max, y_max)
+                        #gradient = generate_gradient((63, 95, 127), (195, 195, 255), 1024, 600)
+
+                if keys[pygame.K_F1]:
+                    self.current_mode = Mode.ROTATING
                 elif keys[pygame.K_F2]:
-                    obj.translate_cube(0, 0.05, 0)
+                    self.current_mode = Mode.MOVING
+                elif keys[pygame.K_1]:
+                    self.current_shading = Shading.WIREFRAME
+                elif keys[pygame.K_2]:
+                    self.current_shading = Shading.LAMBERT
+                elif keys[pygame.K_3]:
+                    self.current_shading = Shading.GOURAUD
+
+                if self.current_mode == Mode.ROTATING:
+                    if keys[pygame.K_w]:
+                        obj.rotate_cube(Direction.UP)
+                    elif keys[pygame.K_s]:
+                        obj.rotate_cube(Direction.DOWN)
+                    elif keys[pygame.K_a]:
+                        obj.rotate_cube(Direction.LEFT)
+                    elif keys[pygame.K_d]:
+                        obj.rotate_cube(Direction.RIGHT)
+                elif self.current_mode == Mode.MOVING:
+                    if keys[pygame.K_w]:
+                        obj.translate_cube(0, 0, 0.05)
+                    elif keys[pygame.K_s]:
+                        obj.translate_cube(0, 0, -0.05)
+                    elif keys[pygame.K_a]:
+                        obj.translate_cube(-0.05, 0, 0)
+                    elif keys[pygame.K_d]:
+                        obj.translate_cube(0.05, 0, 0)
+                    elif keys[pygame.K_q]:
+                        obj.translate_cube(0, -0.05, 0)
+                    elif keys[pygame.K_e]:
+                        obj.translate_cube(0, 0.05, 0)
 
             font = pygame.font.Font(None, 26)
             fps_text = font.render(
