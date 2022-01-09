@@ -5,6 +5,7 @@ from pygame_widgets.button import Button, ButtonArray
 import numpy as np
 from enum import Enum
 import skimage.draw
+import time
 
 
 class Color(Enum):
@@ -349,7 +350,7 @@ class Simulation():
 
         return P
 
-    def trainglething(self, x, y, points):
+    def trianglething(self, x, y, points):
         pts = points
         # print(points)
         (x1, y1, q1), (x2, y2, q2), (x3, y3, q3), (_x, _y, _z) = pts
@@ -410,16 +411,23 @@ class Simulation():
                         pygame.draw.polygon(
                             self.screen, obj.lambert_colors[color], figure)
                     elif self.current_shading == Shading.GOURAUD:
+                        start = time.time()
+
                         x_min = int(figure[:, 0].min())
                         y_min = int(figure[:, 1].min())
                         x_max = int(figure[:, 0].max())
                         y_max = int(figure[:, 1].max())
+                        
+                        if x_max < 0 or x_min > SCREEN_WIDTH or y_max < 0 or y_min > SCREEN_HEIGHT: continue 
 
-                        x_delta = x_max - x_min + 1
-                        y_delta = y_max - y_min + 1
+                        print('Min: ', time.time() - start)
+                        start = time.time()
 
                         rr, cc = skimage.draw.polygon(
                             figure[:, 0] - x_min, figure[:, 1] - y_min)
+                        
+                        print('Polygon: ', time.time() - start)
+                        start = time.time()
 
                         points_r = []
 
@@ -427,24 +435,33 @@ class Simulation():
                             pos = t_vertices[v]
                             c = obj.gouraud_colors[v]
                             points_r.append((pos.x - x_min, pos.y - y_min, c))
+                            
+                        print('Colors: ', time.time() - start)
+                        start = time.time()
 
                         screen_mask = ((x_min + rr) > 0) & ((x_min + rr) < SCREEN_WIDTH) & ((y_min + cc) > 0) & ((y_min + cc) < SCREEN_HEIGHT)
 
                         rr = rr[screen_mask]
                         cc = cc[screen_mask]
 
-                        X = np.repeat(np.arange(x_delta), y_delta)
-                        Y = np.array([*range(y_delta)] * x_delta)
+                        print('Mask: ', time.time() - start)
+                        start = time.time()
 
-                        c = self.trainglething(X, Y, points_r)
-
-                        print(x_min, y_min)
-                        print(x_delta, y_delta)
-                        print(min(rr), min(cc))
-
+                        if len(rr) == 0: continue
                         
-                        draw_buffer[x_min + rr, y_min + cc] = np.array(
-                            [c[0][rr * y_delta + cc], c[1][rr * y_delta + cc], c[2][rr * y_delta + cc]]).T
+                        c = self.trianglething(rr, cc, points_r)
+                        
+                        print('Gradient: ', time.time() - start)
+                        start = time.time()
+                    
+                        draw_buffer[x_min + rr, y_min + cc] = c.T
+                        
+                        print('Draw: ', time.time() - start)
+                        start = time.time()
+                        
+                        # for x, y in zip(rr, cc):
+                        #     draw_buffer[x_min + x, y_min + y] = c[:, i]
+                        #     i += 1
 
                 if keys[pygame.K_r]:
                     self.current_mode = Mode.ROTATING
