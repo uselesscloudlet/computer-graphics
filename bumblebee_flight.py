@@ -38,9 +38,11 @@ class Shading(Enum):
 
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 512
-FOV = 200
+FOV = 360
 VIEWER_DISTANCE = 4
 FPS = 60
+
+seva_colors = np.array([(230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 130, 200), (245, 130, 48), (145, 30, 180)])
 
 
 class Point3D():
@@ -139,13 +141,8 @@ class Cube():
         polygons = []
 
         _, normals = self.get_c_and_norm(tf_vertices, True)
-        # print(self.pos)
         pos = Point3D(*self.pos).project(0, 0, 0)
-        #vis = np.dot([self.pos[0], self.pos[1], -(VIEWER_DISTANCE + self.pos[2]), 0], normals.T)
         vis = np.dot([pos.x, pos.y, pos.z + 100000, 0], normals.T)
-        # print([pos.x, pos.y, pos.z + 100000, 0])
-        # print(self.pos[2])
-        # print(avg_Z)
         for z_val in sorted(avg_Z, key=lambda x: x[1], reverse=True):
             if vis[z_val[0]] >= 0:
                 continue
@@ -188,6 +185,9 @@ class Cube():
                     self.pos[0], self.pos[1], self.pos[2])
             else:
                 projection = rotation
+                projection.x += self.pos[0]
+                projection.y += self.pos[1]
+                projection.z += self.pos[2]
             t_vertices.append(projection)
         return t_vertices
 
@@ -323,66 +323,39 @@ class Simulation():
         self.cubes_bttns()
         self._objects.append(Cube())
 
-    def generate_gradient(from_color, to_color, height, width):
-        channels = []
-        for channel in range(3):
-            from_value, to_value = from_color[channel], to_color[channel]
-            channels.append(
-                np.tile(
-                    np.linspace(from_value, to_value, width), [height, 1],
-                ),
-            )
-        return np.dstack(channels)
-
-    def binterpolation(self, x, y, points):
-        pts = sorted(points)
-        (x1, y1, q11), (_x1, y2, q12), (x2, _y1, q21), (_x2, _y2, q22) = pts
-
-        # if x1 != _x1 or x2 != _x2 or y1 != _y1 or y2 != _y2:
-        #     print('The given points do not form a rectangle')
-        #     raise "NO"
-
-        P = (q11 * (x2 - x) * (y2 - y) +
-             q21 * (x - x1) * (y2 - y) +
-             q12 * (x2 - x) * (y - y1) +
-             q22 * (x - x1) * (y - y1)
-             ) / ((x2 - x1) * (y2 - y1) + 0.01)
-
-        return P
-
     def trianglething(self, x, y, points):
         pts = points
-        # print(points)
-        (x1, y1, q1), (x2, y2, q2), (x3, y3, q3), (_x, _y, _z) = pts
+        (x1, y1, q1), (x2, y2, q2), (x3, y3, q3) = pts
         w1 = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / \
             ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
         w2 = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / \
             ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
         w3 = 1 - w1 - w2
 
-        p1 = np.array([x1, y1])
-        # res1 = q1 * w1 + q2 * w2 + q3 * w3
-        #print(q1.shape, w1.shape)
-        # print(np.outer(q1,w1).shape)
-        #print( np.multiply(q1, w1).shape)
-        res1 = np.outer(q1, w1) + np.outer(q2, w2) + np.outer(q3, w3)
+        return np.outer(q1, w1) + np.outer(q2, w2) + np.outer(q3, w3)
 
-        (x1, y1, q1), (_x, _y, _q), (x3, y3, q3), (x2, y2, q2) = pts
-        w1 = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / \
-            ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
-        w2 = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / \
-            ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
-        w3 = 1 - w1 - w2
+    def area(self, x1, y1, x2, y2, x3, y3):
+        return np.abs((x1 * (y2 - y3) + x2 * (y3 - y1)
+                       + x3 * (y1 - y2)) / 2.0)
 
-        p2 = np.array([x3, y3])
-        #res2 =  q1 * w1 + q2 * w2 + q3 * w3
+    def is_inside(self, x1, y1, x2, y2, x3, y3, x, y):
+        A = self.area(x1, y1, x2, y2, x3, y3)
+        A1 = self.area(x, y, x2, y2, x3, y3)
+        A2 = self.area(x1, y1, x, y, x3, y3)
+        A3 = self.area(x1, y1, x2, y2, x, y)
+        return (A1 + A2 + A3) - A < 0.00001
 
-        res2 = np.outer(q1, w1) + np.outer(q2, w2) + np.outer(q3, w3)
+    def line_plane_collision(self, planeNormal, planePoint, rayDirection, rayPoint, epsilon=1e-6):
+        ndotu = planeNormal.dot(rayDirection)
+        if abs(ndotu) < epsilon:
+            #raise RuntimeError("no intersection or line is within plane")
+            return False
 
-        above = np.cross(np.array(list(zip(x, y))) - p1, p1 - p2) < 0
-
-        # return np.where(above, np.full_like(res1, 255), np.full_like(res2, 0))
-        return np.where(above, res1, res2)
+        w = rayPoint - planePoint
+        si = -planeNormal.dot(w) / ndotu
+        Psi = w + si * rayDirection + planePoint
+        return Psi
+        # return True
 
     def run(self):
         self.add_cube_btn()
@@ -397,71 +370,217 @@ class Simulation():
                 if event.type == pygame.QUIT:
                     pygame.quit()
             keys = pygame.key.get_pressed()
-            draw_buffer = np.full((SCREEN_WIDTH, SCREEN_HEIGHT, 3), 100)
+            draw_buffer = np.full((SCREEN_WIDTH, SCREEN_HEIGHT, 3), 255)
             for obj in self._objects:
                 polygons = obj.draw_cube(point_lights)
-                t_vertices = obj.transform_vertices()
-                for poly_ind, polygon in enumerate(polygons):
+                
+                if self.current_shading == Shading.GOURAUD or self.current_shading == Shading.PHONG:
+                    t_vertices = obj.transform_vertices()
+                    centers, normals = obj.get_c_and_norm(obj.transform_vertices(False), True)
+                for polygon in polygons:
                     figure = polygon[0]
                     color = polygon[1]
                     if self.current_shading == Shading.WIREFRAME:
-                        pygame.draw.aalines(
+                        pygame.draw.lines(
                             self.screen, Color.BLACK.value, True, figure)
                     elif self.current_shading == Shading.LAMBERT:
+                        # pygame.draw.polygon(
+                        #     self.screen, obj.lambert_colors[color], figure)
                         pygame.draw.polygon(
-                            self.screen, obj.lambert_colors[color], figure)
+                            self.screen, seva_colors[color], figure)
                     elif self.current_shading == Shading.GOURAUD:
-                        start = time.time()
-
                         x_min = int(figure[:, 0].min())
                         y_min = int(figure[:, 1].min())
                         x_max = int(figure[:, 0].max())
                         y_max = int(figure[:, 1].max())
+                        x_delta = x_max - x_min + 1
+                        y_delta = y_max - y_min + 1
+
+                        if x_max < 0 or x_min > SCREEN_WIDTH or y_max < 0 or y_min > SCREEN_HEIGHT:
+                            continue
+
+                        for i in np.arange(2):
+                            X = np.repeat(np.arange(x_delta), y_delta)
+                            Y = np.array([*np.arange(y_delta)] * x_delta)
+
+                            screen_mask = ((x_min + X) > 0) & ((x_min + X) < SCREEN_WIDTH) & (
+                                (y_min + Y) > 0) & ((y_min + Y) < SCREEN_HEIGHT)
+                            X = X[screen_mask]
+                            Y = Y[screen_mask]
+
+                            XY_mask = self.is_inside(figure[(0 + i * 2) % 4, 0] - x_min,
+                                                     figure[(0 + i * 2) %
+                                                            4, 1] - y_min,
+                                                     figure[(1 + i * 2) %
+                                                            4, 0] - x_min,
+                                                     figure[(1 + i * 2) %
+                                                            4, 1] - y_min,
+                                                     figure[(2 + i * 2) %
+                                                            4, 0] - x_min,
+                                                     figure[(2 + i * 2) %
+                                                            4, 1] - y_min,
+                                                     X, Y)
+                            X = X[XY_mask]
+                            Y = Y[XY_mask]
+
+                            points_r = []
+
+                            for v in obj.faces[color]:
+                                pos = t_vertices[v]
+                                c = obj.gouraud_colors[v]
+                                points_r.append(
+                                    (pos.x - x_min, pos.y - y_min, c))
+                            if len(X) == 0:
+                                continue
+
+                            points_r = np.array(points_r)
+
+                            if i == 0:
+                                c = self.trianglething(X, Y, points_r[:3])
+                            else:
+                                c = self.trianglething(
+                                    X, Y, points_r[[0, 2, 3]])
+
+                            draw_buffer[x_min + X, y_min + Y] = c.T
+                    elif self.current_shading == Shading.PHONG:
+                        plane = normals[color]
+
+                        ray_origin = np.array([0, 0, 10])
+
+                        # range(0, SCREEN_WIDTH, 10):
                         
-                        if x_max < 0 or x_min > SCREEN_WIDTH or y_max < 0 or y_min > SCREEN_HEIGHT: continue 
-
-                        print('Min: ', time.time() - start)
-                        start = time.time()
-
-                        rr, cc = skimage.draw.polygon(
-                            figure[:, 0] - x_min, figure[:, 1] - y_min)
+                        H, W = SCREEN_HEIGHT / FOV / 2, SCREEN_WIDTH / FOV / 2
                         
-                        print('Polygon: ', time.time() - start)
-                        start = time.time()
-
-                        points_r = []
-
-                        for i, v in enumerate(obj.faces[color]):
-                            pos = t_vertices[v]
-                            c = obj.gouraud_colors[v]
-                            points_r.append((pos.x - x_min, pos.y - y_min, c))
+                        xxx = np.linspace(-W / 2, W / 2, SCREEN_WIDTH)
+                        yyy = np.linspace(-H / 2, H / 2, SCREEN_HEIGHT)
+                        X = np.repeat(xxx, len(yyy))
+                        Y = np.array([*yyy] * len(xxx))
+                        
+                        x1, y1, z1 = ray_origin
+                        x2 =  X
+                        y2 =  Y
+                        z2 =  8
+                        
+                        a, b, c, d = plane
+                        
+                        ts = (-d - a * x1 - b * y1 - c * z1) / \
+                                    (a * (x2 - x1) + b * (y2 - y1) + c * (z2 - z1))
+                                                                        
+                                    
+                        xs = ts * (x2 - x1) + x1
+                        ys = ts * (y2 - y1) + y1
+                        zs = ts * (z2 - z1) + z1
+                        
+                        flags = ts > 0
+                        for plane1 in normals:
+                            a1, b1, c1, d1 = plane1
                             
-                        print('Colors: ', time.time() - start)
-                        start = time.time()
+                            if np.sum(np.abs(plane + plane1)) < 0.01:
+                                continue
+                            
+                            flags &= ((a1 * xs + b1 * ys + c1 * zs + d1) < 0.01)
+                            
 
-                        screen_mask = ((x_min + rr) > 0) & ((x_min + rr) < SCREEN_WIDTH) & ((y_min + cc) > 0) & ((y_min + cc) < SCREEN_HEIGHT)
+                        #print(np.max(flags))
+                        xs = xs[flags]
+                        ys = ys[flags]
+                        zs = zs[flags]
+                        
+                        if (len(xs) == 0): continue
+                        factor = FOV / zs
+                        xs = xs * factor + SCREEN_WIDTH / 2
+                        ys = ys * factor + SCREEN_HEIGHT / 2
+                        xs = np.round(xs).astype(int)
+                        ys = np.round(ys).astype(int)
+                        
+                        screen_mask = (xs > 0) & (xs < SCREEN_WIDTH) & (ys > 0) & (ys < SCREEN_HEIGHT)
+                        xs = xs[screen_mask]
+                        ys = ys[screen_mask]
+                        
+                        
+                        draw_buffer[xs, SCREEN_HEIGHT - ys ] = seva_colors[color]
 
-                        rr = rr[screen_mask]
-                        cc = cc[screen_mask]
 
-                        print('Mask: ', time.time() - start)
-                        start = time.time()
+                        
+                        # for i in range(len(flags)):
+                        #     if flags[i]:
+                        #         p = Point3D(xs[i], ys[i], zs[i])
+                        #         _x, _y, _z = p.project(0, 0, 0).to_arr()
+                        #         #_x, _y = x * SCREEN_WIDTH, y * SCREEN_HEIGHT
+                        #         if _x < 0 or _x > SCREEN_WIDTH or _y < 0 or _y > SCREEN_HEIGHT:
+                        #             continue
+                        #         #print(x, y)
+                        #         draw_buffer[int(_x), int(_y)] = seva_colors[color]#obj.lambert_colors[color]#[0, 0, 0]
+                        
+                        continue
+                        i = 0
+                        for xx in xxx:
+                            for yy in yyy:
 
-                        if len(rr) == 0: continue
-                        
-                        c = self.trianglething(rr, cc, points_r)
-                        
-                        print('Gradient: ', time.time() - start)
-                        start = time.time()
-                    
-                        draw_buffer[x_min + rr, y_min + cc] = c.T
-                        
-                        print('Draw: ', time.time() - start)
-                        start = time.time()
-                        
-                        # for x, y in zip(rr, cc):
-                        #     draw_buffer[x_min + x, y_min + y] = c[:, i]
-                        #     i += 1
+                                ray_direction = np.array([xx, yy, -4])
+                                a, b, c, d = -plane
+                                
+                                x1, y1, z1 = ray_origin
+                                x2, y2, z2 = ray_direction
+                                
+
+                                
+                                t = (-d - a * x1 - b * y1 - c * z1) / \
+                                    (a * (x2 - x1) + b * (y2 - y1) + c * (z2 - z1))
+                                                            
+
+
+                                x = t * (x2 - x1) + x1
+                                y = t * (y2 - y1) + y1
+                                z = t * (z2 - z1) + z1
+                                
+
+
+
+                                flag = True
+                                for plane1 in normals:
+                                    a1, b1, c1, d1 = plane1
+                                    
+                                    if np.sum(np.abs(plane + plane1)) < 0.001:
+                                        continue
+
+
+                                    if a1 * x + b1 * y + c1 * z + d1 >= 0:
+                                        flag = False
+                                        break
+
+                                    if a * x1 + b * y1 + c * z1 + d < 0:
+                                        flag = False
+                                        break
+
+                                    if a * x2 + b * y2 + c * z2 + d < 0:
+                                        flag = False
+                                        break
+
+                                    if a * (x2 - x1) + b * (y2 - y1) + c * (z2 - z1) > 0:
+                                        flag = False
+                                        break
+
+                                if t < 0:
+                                    continue
+
+                                if not flag:
+                                    continue
+                              
+
+                                
+                                #print(x, y, z)
+                                p = Point3D(x, y, z)
+                                _x, _y, _z = p.project(0, 0, 0).to_arr()
+                                #_x, _y = x * SCREEN_WIDTH, y * SCREEN_HEIGHT
+                                if _x < 0 or _x > SCREEN_WIDTH or _y < 0 or _y > SCREEN_HEIGHT:
+                                    continue
+                                #print(x, y)
+                                draw_buffer[int(_x), int(_y)] = seva_colors[color]#obj.lambert_colors[color]#[0, 0, 0]
+                                # for v in obj.faces[color]:
+                                #     pos = t_vertices[v]
+
+                                #hit = self.line_plane_collision()
 
                 if keys[pygame.K_r]:
                     self.current_mode = Mode.ROTATING
@@ -473,6 +592,8 @@ class Simulation():
                     self.current_shading = Shading.LAMBERT
                 elif keys[pygame.K_3]:
                     self.current_shading = Shading.GOURAUD
+                elif keys[pygame.K_4]:
+                    self.current_shading = Shading.PHONG
 
                 if self.current_mode == Mode.ROTATING:
                     if keys[pygame.K_w]:
@@ -498,6 +619,9 @@ class Simulation():
                         obj.translate_cube(0, 0.05, 0)
 
             if self.current_shading == Shading.GOURAUD:
+                surf = pygame.surfarray.make_surface(draw_buffer)
+                self.screen.blit(surf, (0, 0))
+            elif self.current_shading == Shading.PHONG:
                 surf = pygame.surfarray.make_surface(draw_buffer)
                 self.screen.blit(surf, (0, 0))
 
