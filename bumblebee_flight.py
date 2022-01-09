@@ -37,7 +37,7 @@ class Shading(Enum):
 
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 512
-FOV = 90
+FOV = 200
 VIEWER_DISTANCE = 4
 FPS = 60
 
@@ -351,30 +351,37 @@ class Simulation():
 
     def trainglething(self, x, y, points):
         pts = points
-        #print(points)
+        # print(points)
         (x1, y1, q1), (x2, y2, q2), (x3, y3, q3), (_x, _y, _z) = pts
-        w1 = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
-        w2 = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
+        w1 = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / \
+            ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
+        w2 = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / \
+            ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
         w3 = 1 - w1 - w2
-        
-        p1 = np.array([x1, y1])
-        res1 = q1 * w1 + q2 * w2 + q3 * w3
-        
-        (x1, y1, q1), (_x, _y, _q), (x3, y3, q3), (x2, y2, q2) = pts
-        w1 = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
-        w2 = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
-        w3 = 1 - w1 - w2
-        
-        
-        p2 = np.array([x3, y3])
-        res2 = q1 * w1 + q2 * w2 + q3 * w3
-                
-        above = np.cross(np.array(list(zip(x, y))) - p1, p1 - p2) < 0
-        
-    
-        #return np.where(above, np.full_like(res1, 255), np.full_like(res2, 0))
-        return np.where(above, res1, res2)
 
+        p1 = np.array([x1, y1])
+        # res1 = q1 * w1 + q2 * w2 + q3 * w3
+        #print(q1.shape, w1.shape)
+        # print(np.outer(q1,w1).shape)
+        #print( np.multiply(q1, w1).shape)
+        res1 = np.outer(q1, w1) + np.outer(q2, w2) + np.outer(q3, w3)
+
+        (x1, y1, q1), (_x, _y, _q), (x3, y3, q3), (x2, y2, q2) = pts
+        w1 = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / \
+            ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
+        w2 = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / \
+            ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
+        w3 = 1 - w1 - w2
+
+        p2 = np.array([x3, y3])
+        #res2 =  q1 * w1 + q2 * w2 + q3 * w3
+
+        res2 = np.outer(q1, w1) + np.outer(q2, w2) + np.outer(q3, w3)
+
+        above = np.cross(np.array(list(zip(x, y))) - p1, p1 - p2) < 0
+
+        # return np.where(above, np.full_like(res1, 255), np.full_like(res2, 0))
+        return np.where(above, res1, res2)
 
     def run(self):
         self.add_cube_btn()
@@ -415,78 +422,33 @@ class Simulation():
                             figure[:, 0] - x_min, figure[:, 1] - y_min)
 
                         points_r = []
-                        points_g = []
-                        points_b = []
 
-                        corners = [[[], []], [[], []]]
-                        
                         for i, v in enumerate(obj.faces[color]):
                             pos = t_vertices[v]
                             c = obj.gouraud_colors[v]
-
-                            x = 0 if abs(
-                                pos.x - x_min) < abs(pos.x - x_max) else 1
-                            y = 0 if abs(
-                                pos.y - y_min) < abs(pos.y - y_max) else 1
-                            
-                            
                             points_r.append((pos.x - x_min, pos.y - y_min, c))
-                            points_g.append((pos.x - x_min, pos.y - y_min, c[1]))
-                            points_b.append((pos.x - x_min, pos.y - y_min, c[2]))
-                            corners[x][y].append(c)
 
-                            
+                        screen_mask = ((x_min + rr) > 0) & ((x_min + rr) < SCREEN_WIDTH) & ((y_min + cc) > 0) & ((y_min + cc) < SCREEN_HEIGHT)
 
-                        for x in [0, 1]:
-                            for y in [0, 1]:
-                                if len(corners[x][y]) > 0:
-                                    corners[x][y] = np.mean(corners[x][y], axis=0)
-                        for x in [0, 1]:
-                            for y in [0, 1]:
-                                if len(corners[x][y]) == 0:
-                                    if len(corners[(x + 1) % 2][y]) == 0:
-                                        corners[x][y] = corners[x][(y + 1) % 2]
-                                    elif len(corners[x][(y + 1) % 2]) == 0:
-                                        corners[x][y] = corners[(x + 1) % 2][y]
-                                    else:
-                                        corners[x][y] = np.mean([corners[(x + 1) % 2][y], corners[x][(y + 1) % 2]], axis=0)
+                        rr = rr[screen_mask]
+                        cc = cc[screen_mask]
 
-
-                        # points_r.append((0, 0, corners[0][0][0]))
-                        # points_r.append((x_delta, 0, corners[1][0][0]))
-                        # points_r.append((x_delta, y_delta, corners[1][1][0]))
-                        # points_r.append((0, y_delta, corners[0][1][0]))
-                        
-                        # points_g.append((0, 0, corners[0][0][1]))
-                        # points_g.append((x_delta, 0, corners[1][0][1]))
-                        # points_g.append((x_delta, y_delta, corners[1][1][1]))
-                        # points_g.append((0, y_delta, corners[0][1][1]))
-                        
-                        # points_b.append((0, 0, corners[0][0][2]))
-                        # points_b.append((x_delta, 0, corners[1][0][2]))
-                        # points_b.append((x_delta, y_delta, corners[1][1][2]))
-                        # points_b.append((0, y_delta, corners[0][1][2]))
-                            
                         X = np.repeat(np.arange(x_delta), y_delta)
                         Y = np.array([*range(y_delta)] * x_delta)
 
+                        c = self.trainglething(X, Y, points_r)
 
-                        # rs = np.clip(self.binterpolation(
-                        #     X, Y, points_r), 0, 255)
-                        # gs = np.clip(self.binterpolation(
-                        #     X, Y, points_g), 0, 255)
-                        # bs = np.clip(self.binterpolation(
-                        #     X, Y, points_b), 0, 255)
-                        
-                        rs = self.trainglething(X, Y, points_r)
-                        gs = self.trainglething(X, Y, points_g)
-                        bs = self.trainglething(X, Y, points_b)
-                        
-                        draw_buffer[x_min + rr, y_min + cc] = np.array([rs[rr * y_delta + cc], gs[rr * y_delta + cc], bs[rr * y_delta + cc]]).T
+                        print(x_min, y_min)
+                        print(x_delta, y_delta)
+                        print(min(rr), min(cc))
 
-                if keys[pygame.K_F1]:
+                        
+                        draw_buffer[x_min + rr, y_min + cc] = np.array(
+                            [c[0][rr * y_delta + cc], c[1][rr * y_delta + cc], c[2][rr * y_delta + cc]]).T
+
+                if keys[pygame.K_r]:
                     self.current_mode = Mode.ROTATING
-                elif keys[pygame.K_F2]:
+                elif keys[pygame.K_t]:
                     self.current_mode = Mode.MOVING
                 elif keys[pygame.K_1]:
                     self.current_shading = Shading.WIREFRAME
@@ -521,7 +483,7 @@ class Simulation():
             if self.current_shading == Shading.GOURAUD:
                 surf = pygame.surfarray.make_surface(draw_buffer)
                 self.screen.blit(surf, (0, 0))
-            
+
             font = pygame.font.Font(None, 26)
             fps_text = font.render(
                 f'FPS: {np.round(self.clock.get_fps())}', True, Color.BLACK.value)
@@ -533,5 +495,4 @@ class Simulation():
             pygame.display.update()
 
 
-# objects = [Cube()]
 Simulation(SCREEN_WIDTH, SCREEN_HEIGHT).run()
