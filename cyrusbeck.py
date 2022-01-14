@@ -332,19 +332,19 @@ while True:
                             needed_figure = sample
                             prim_center = get_polygon_center(dots)
                             break
-                # elif tb_isPressed:
-                #     needed_figures = []
-                #     for sample in reversed(all_dots[:-1]):
-                #         dots = get_dots_coordinates(sample[0])
-                #         if ray_tracing(*pos, dots):
-                #             needed_figures.append(sample)
-                #     min = np.iinfo(np.int16).max
-                #     lowest_figure = None
-                #     for figure in needed_figures:
-                #         if figure[2] < min:
-                #             lowest_figure = figure
-                #     idx = all_dots.index(needed_figures[0])
-                #     all_dots.insert(0, all_dots.pop(idx))
+                elif tb_isPressed:
+                    needed_figures = []
+                    for sample in reversed(all_dots[:-1]):
+                        dots = get_dots_coordinates(sample[0])
+                        if ray_tracing(*pos, dots):
+                            needed_figures.append(sample)
+                    min = np.iinfo(np.int16).max
+                    lowest_figure = None
+                    for figure in needed_figures:
+                        if figure[2] < min:
+                            lowest_figure = figure
+                    idx = all_dots.index(needed_figures[0])
+                    all_dots.insert(0, all_dots.pop(idx))
             else:
                 break
         if event.type == pygame.MOUSEBUTTONUP:
@@ -358,41 +358,11 @@ while True:
         first_figure = get_dots_coordinates(all_dots[-2][0])
         figure_triangles = [tuple(reversed(dts)) for dts in tripy.earclip(first_figure)]
         for i in range(len(figure_triangles)):
-            for j in range(1, len(all_dots) - 1):
-                cur_figure = get_dots_coordinates(all_dots[j][0])
-                for k in range(len(all_dots[j][0])):
+            for j in reversed(all_dots[:-2]):
+                cur_figure = get_dots_coordinates(j[0])
+                for k in range(len(cur_figure)):
                     lines.append(cyrus_beck(figure_triangles[i], (cur_figure[k], cur_figure[(k + 1) % len(cur_figure)])))
-                    
-        
-        
-    
-    
-    # first_figure = None
-    # cb_lines = []
-    # all_lines = []
-    # for idx, sample in enumerate(reversed(all_dots[:-1])):
-    #     current_figure = get_dots_coordinates(sample[0])
-    #     lines = list(zip(current_figure[:-1], current_figure[1:])) + [[current_figure[-1], current_figure[0]]]
-        
-    #     for idx1, sample1 in enumerate(reversed(all_dots[idx + 1:-1])):
-    #         hiding_figure = get_dots_coordinates(sample1[0])
-    #         cb_triangles = [tuple(reversed(dts)) for dts in tripy.earclip(hiding_figure)]
-    #         new_lines = []
-    #         for triangle in cb_triangles:
-    #             for line in lines:
-    #                 invisible_part = cyrus_beck(triangle, line)
-    #                 if invisible_part:
-    #                     l1 = (line[0], invisible_part[0])
-    #                     l2 = (invisible_part[1], line[1])
-    #                     new_lines += [l1, l2]
-    #                 else:
-    #                     new_lines += [line]
-
-    #         lines = new_lines
-            
-    #     all_lines += lines
-        
-    #     print(lines)
+    lines = np.array([line for line in lines if line is not None], dtype=int).tolist()
 
     if needed_figure is not None:
         final_pos = pygame.mouse.get_pos()
