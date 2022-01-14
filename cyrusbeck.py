@@ -82,7 +82,7 @@ def cyrus_beck(figure, line):
     l2 = np.array(line[1])
     p1 = l1 + (l2 - l1) * tE
     p2 = l1 + (l2 - l1) * tL
-    return p1, p2
+    return list(p1), list(p2)
 
 
 def get_dots_coordinates(group):
@@ -99,54 +99,45 @@ def pressed_button(button):
     global rb_isPressed
     global sb_isPressed
     global tb_isPressed
-    global cbb_isPressed
     if button == 'db':
         draw_button.setInactiveColour((0, 250, 154))
         move_button.setInactiveColour((169, 169, 169))
         rotate_button.setInactiveColour((169, 169, 169))
         scale_button.setInactiveColour((169, 169, 169))
         tabulate_button.setInactiveColour((169, 169, 169))
-        cyrus_beck_button.setInactiveColour((169, 169, 169))
         db_isPressed = True
         mb_isPressed = False
         rb_isPressed = False
         sb_isPressed = False
         tb_isPressed = False
-        cbb_isPressed = False
     elif button == 'mb':
         draw_button.setInactiveColour((169, 169, 169))
         move_button.setInactiveColour((0, 250, 154))
         rotate_button.setInactiveColour((169, 169, 169))
         scale_button.setInactiveColour((169, 169, 169))
         tabulate_button.setInactiveColour((169, 169, 169))
-        cyrus_beck_button.setInactiveColour((169, 169, 169))
         db_isPressed = False
         mb_isPressed = True
         rb_isPressed = False
         sb_isPressed = False
         tb_isPressed = False
-        cbb_isPressed = False
     elif button == 'rb':
         draw_button.setInactiveColour((169, 169, 169))
         move_button.setInactiveColour((169, 169, 169))
         rotate_button.setInactiveColour((0, 250, 154))
         scale_button.setInactiveColour((169, 169, 169))
         tabulate_button.setInactiveColour((169, 169, 169))
-        cyrus_beck_button.setInactiveColour((169, 169, 169))
         db_isPressed = False
         mb_isPressed = False
         rb_isPressed = True
         sb_isPressed = False
         tb_isPressed = False
-        cbb_isPressed = False
-        cyrus_beck_button.setInactiveColour((169, 169, 169))
     elif button == 'sb':
         draw_button.setInactiveColour((169, 169, 169))
         move_button.setInactiveColour((169, 169, 169))
         rotate_button.setInactiveColour((169, 169, 169))
         scale_button.setInactiveColour((0, 250, 154))
         tabulate_button.setInactiveColour((169, 169, 169))
-        cyrus_beck_button.setInactiveColour((169, 169, 169))
         db_isPressed = False
         mb_isPressed = False
         rb_isPressed = False
@@ -159,26 +150,22 @@ def pressed_button(button):
         rotate_button.setInactiveColour((169, 169, 169))
         scale_button.setInactiveColour((169, 169, 169))
         tabulate_button.setInactiveColour((0, 250, 154))
-        cyrus_beck_button.setInactiveColour((169, 169, 169))
         db_isPressed = False
         mb_isPressed = False
         rb_isPressed = False
         sb_isPressed = False
         tb_isPressed = True
-        cbb_isPressed = False
     elif button == 'cbb':
         draw_button.setInactiveColour((169, 169, 169))
         move_button.setInactiveColour((169, 169, 169))
         rotate_button.setInactiveColour((169, 169, 169))
         scale_button.setInactiveColour((169, 169, 169))
         tabulate_button.setInactiveColour((169, 169, 169))
-        cyrus_beck_button.setInactiveColour((0, 250, 154))
         db_isPressed = False
         mb_isPressed = False
         rb_isPressed = False
         sb_isPressed = False
         tb_isPressed = False
-        cbb_isPressed = True
 
 
 def ray_tracing(x, y, poly):
@@ -293,16 +280,6 @@ tabulate_button = Button(win=screen,
                          hoverColour=(128, 128, 128),
                          pressedColour=(105, 105, 105),
                          onClick=lambda: pressed_button('tb'))
-cyrus_beck_button = Button(win=screen,
-                           x=SCREEN_WIDTH-100,
-                           y=250,
-                           width=100,
-                           height=50,
-                           text='CYRUS-BECK',
-                           inactiveColour=(169, 169, 169),
-                           hoverColour=(128, 128, 128),
-                           pressedColour=(105, 105, 105),
-                           onClick=lambda: pressed_button('cbb'))
 
 while True:
     clock.tick(FPS)
@@ -355,47 +332,19 @@ while True:
                             needed_figure = sample
                             prim_center = get_polygon_center(dots)
                             break
-                elif tb_isPressed:
-                    needed_figures = []
-                    for sample in reversed(all_dots[:-1]):
-                        dots = get_dots_coordinates(sample[0])
-                        if ray_tracing(*pos, dots):
-                            needed_figures.append(sample)
-                    min = np.iinfo(np.int16).max
-                    lowest_figure = None
-                    for figure in needed_figures:
-                        if figure[2] < min:
-                            lowest_figure = figure
-                    idx = all_dots.index(needed_figures[0])
-                    all_dots.insert(0, all_dots.pop(idx))
-                elif cbb_isPressed:
-                    if event.button == 1:
-                        if click_count == 0:
-                            for sample in reversed(all_dots[:-1]):
-                                dots = get_dots_coordinates(sample[0])
-                                if ray_tracing(*pos, dots):
-                                    cb_figure = dots
-                                    break
-                        elif click_count == 1:
-                            pos1 = pos
-                            cb_points.add(Dot(*pos1))
-                        elif click_count == 2:
-                            pos2 = pos
-                            cb_points.add(Dot(*pos2))
-                            
-                            cb_triangles = [tuple(reversed(dts)) for dts in tripy.earclip(cb_figure)]
-                            lines = []
-                            for triangle in cb_triangles:
-                                lines.append(cyrus_beck(triangle, (pos1, pos2)))
-                            lines = np.array([line for line in lines if line is not None], dtype=int).tolist()
-                        click_count += 1
-                        if not cb_figure:
-                            click_count = 0
-                    if event.button == 3:
-                        click_count = 0
-                        cb_points.empty()
-                        cb_figure = None
-                        lines = None
+                # elif tb_isPressed:
+                #     needed_figures = []
+                #     for sample in reversed(all_dots[:-1]):
+                #         dots = get_dots_coordinates(sample[0])
+                #         if ray_tracing(*pos, dots):
+                #             needed_figures.append(sample)
+                #     min = np.iinfo(np.int16).max
+                #     lowest_figure = None
+                #     for figure in needed_figures:
+                #         if figure[2] < min:
+                #             lowest_figure = figure
+                #     idx = all_dots.index(needed_figures[0])
+                #     all_dots.insert(0, all_dots.pop(idx))
             else:
                 break
         if event.type == pygame.MOUSEBUTTONUP:
@@ -403,6 +352,47 @@ while True:
             prim_center = None
         if event.type == pygame.QUIT:
             pygame.quit()
+
+    lines = []
+    if len(all_dots) > 2:
+        first_figure = get_dots_coordinates(all_dots[-2][0])
+        figure_triangles = [tuple(reversed(dts)) for dts in tripy.earclip(first_figure)]
+        for i in range(len(figure_triangles)):
+            for j in range(1, len(all_dots) - 1):
+                cur_figure = get_dots_coordinates(all_dots[j][0])
+                for k in range(len(all_dots[j][0])):
+                    lines.append(cyrus_beck(figure_triangles[i], (cur_figure[k], cur_figure[(k + 1) % len(cur_figure)])))
+                    
+        
+        
+    
+    
+    # first_figure = None
+    # cb_lines = []
+    # all_lines = []
+    # for idx, sample in enumerate(reversed(all_dots[:-1])):
+    #     current_figure = get_dots_coordinates(sample[0])
+    #     lines = list(zip(current_figure[:-1], current_figure[1:])) + [[current_figure[-1], current_figure[0]]]
+        
+    #     for idx1, sample1 in enumerate(reversed(all_dots[idx + 1:-1])):
+    #         hiding_figure = get_dots_coordinates(sample1[0])
+    #         cb_triangles = [tuple(reversed(dts)) for dts in tripy.earclip(hiding_figure)]
+    #         new_lines = []
+    #         for triangle in cb_triangles:
+    #             for line in lines:
+    #                 invisible_part = cyrus_beck(triangle, line)
+    #                 if invisible_part:
+    #                     l1 = (line[0], invisible_part[0])
+    #                     l2 = (invisible_part[1], line[1])
+    #                     new_lines += [l1, l2]
+    #                 else:
+    #                     new_lines += [line]
+
+    #         lines = new_lines
+            
+    #     all_lines += lines
+        
+    #     print(lines)
 
     if needed_figure is not None:
         final_pos = pygame.mouse.get_pos()
